@@ -83,7 +83,8 @@ static int findOrAllocNode(const char *mac) {
   return -1; // full — replace oldest
 }
 
-void IRAM_ATTR onNodeReceive(const uint8_t *mac, const uint8_t *data, int len) {
+// ESP-NOW receive callback — called from WiFi task, not an ISR
+void onNodeReceive(const uint8_t *mac, const uint8_t *data, int len) {
   if (len < (int)sizeof(NodePacket)) return;
 
   char macStr[18];
@@ -93,7 +94,7 @@ void IRAM_ATTR onNodeReceive(const uint8_t *mac, const uint8_t *data, int len) {
   NodePacket pkt;
   memcpy(&pkt, data, sizeof(NodePacket));
 
-  portENTER_CRITICAL_ISR(&nodeMux);
+  portENTER_CRITICAL(&nodeMux);
   int idx = findOrAllocNode(macStr);
   if (idx >= 0) {
     strlcpy(nodeReadings[idx].mac,     macStr,   sizeof(nodeReadings[idx].mac));
@@ -103,7 +104,7 @@ void IRAM_ATTR onNodeReceive(const uint8_t *mac, const uint8_t *data, int len) {
     nodeReadings[idx].last_seen_ms = millis();
     nodeReadings[idx].active       = true;
   }
-  portEXIT_CRITICAL_ISR(&nodeMux);
+  portEXIT_CRITICAL(&nodeMux);
 
   Serial.printf("[ESP-NOW] Node %s (%s) — soil=%.1f%% wet=%s\n",
                 pkt.id, macStr, pkt.soil_pct, pkt.soil_wet ? "YES" : "NO");
@@ -368,10 +369,14 @@ void setup() {
   turretServo.write(SERVO_HOME);
   Serial.printf("[Servo] Home → %d°\n", SERVO_HOME);
 
-  // SoftAP
-  WiFi.softAP(AP_SSID);
-  Serial.print("[WiFi] AP \"" AP_SSID "\" started — IP: ");
-  Serial.println(WiFi.softAPIP());
+  // SoftAP — WIFI_AP_STA mode required for ESP-NOW to receive while in AP mode
+  WiFi.mode(WIFI_AP_STA);
+  WiFi.softAP(AP_SSID, nullptr, 1);
+  Serial.printf("[WiFi] STA MAC : %s\n", WiFi.macAddress().c_str());
+  Serial.printf("[WiFi] AP  MAC : %s\n", WiFi.softAPmacAddress().c_str());
+  Serial.printf("[WiFi] AP started — IP: %s  channel: %d\n",
+                WiFi.softAPIP().toString().c_str(),
+                WiFi.channel());
 
   // ESP-NOW — receive sensor packets from nodes
   if (esp_now_init() != ESP_OK) {

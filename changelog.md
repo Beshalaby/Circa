@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.9 — 2026-03-28
+
+- **Node firmware** (`firmware/node/`): Added `platformio.ini` and moved source to `src/main.cpp` (PlatformIO layout). Switched from broadcast to **unicast ESP-NOW**, targeting the base station's STA MAC (`A4:F0:0F:91:2A:E4`) for reliable delivery.
+- **Base station firmware** (`firmware/turret_station/src/main.cpp`): Fixed ESP-NOW receive callback — removed `IRAM_ATTR` and replaced `portENTER/EXIT_CRITICAL_ISR` with `portENTER/EXIT_CRITICAL` (callback runs in WiFi task context, not an ISR). Added STA/AP MAC address debug prints on boot.
+- **Repository:** Migrated to **CircaOrg** GitHub organization.
+
 ## 0.5.8 — 2026-03-28
 
 - **Sensor node firmware** (`firmware/node/node.ino`): Complete rewrite using **ESP-NOW** instead of MQTT. Each node wakes, reads the soil moisture sensor (GPIO 18 = DO digital threshold, GPIO 34 = AO analog), sends a `NodePacket` to the base station via ESP-NOW broadcast, then deep-sleeps for 30 s. No WiFi connection required — transmits on the SoftAP's channel (1). ⚠ AO wire must be on **GPIO 34**, not GPIO 19 (which is not ADC-capable).
