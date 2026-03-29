@@ -341,21 +341,10 @@ function ScheduleForm({ stations, onCancel, onCreated }: {
 // TURRET TAB
 // ────────────────────────────────────────────────────────────
 function TurretTab() {
-  const { stations } = useFieldStore();
-  const getHardwareUrl = useHardwareStore((s) => s.getUrl);
+  const api = useMemo(() => new TurretApiClient('http://192.168.4.1', SERVER, true), []);
 
-  const [selectedStation, setSelectedStation] = useState('');
   const [pingStatus, setPingStatus] = useState<'idle' | 'ok' | 'fail'>('idle');
-  const [pinging, setPinging] = useState(false);
-
-  const hardwareUrl = selectedStation ? getHardwareUrl(selectedStation) : 'http://192.168.4.1';
-  const api = useMemo(
-    () => new TurretApiClient(hardwareUrl, SERVER, true),
-    [hardwareUrl],
-  );
-
-  // Always-on node panel API — uses selected station URL or falls back to 192.168.4.1
-  const nodeApi = api;
+  const [pinging, setPinging]       = useState(false);
 
   const ping = useCallback(async () => {
     setPinging(true);
@@ -364,61 +353,42 @@ function TurretTab() {
     setPinging(false);
   }, [api]);
 
-  useEffect(() => {
-    setPingStatus('idle');
-    ping();
-  }, [selectedStation]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Auto-detect on mount
+  useEffect(() => { ping(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const online = pingStatus === 'ok';
 
   return (
     <div className="turret-tab">
       <h2 className="ctrl-section-title">Hardware Control</h2>
       <p className="ctrl-section-sub">Direct control of the ESP32 turret base station</p>
 
-      {/* ── Connection row ── */}
+      {/* ── Auto-detected base station card ── */}
       <div className="hw-connection card">
         <div className="hw-connection-row">
-          <div className="form-row hw-station-row">
-            <label className="label">Base Station</label>
-            <select
-              id="turret-station-sel"
-              className="input"
-              value={selectedStation}
-              onChange={(e) => setSelectedStation(e.target.value)}
-            >
-              <option value="">Select a station…</option>
-              {stations.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
+          <div className="hw-auto-info">
+            <span className="label">Base Station</span>
+            <span className="hw-url mono">http://192.168.4.1</span>
+            <span className="hw-auto-hint">Auto-detected — connect to Turret-ESP32 WiFi</span>
           </div>
-
-          {selectedStation && (
-            <div className="hw-status-col">
-              <span className="label">Hardware URL</span>
-              <span className="hw-url mono">{hardwareUrl}</span>
-              <div className="hw-ping-row">
-                <span className={`hw-badge hw-badge--${pingStatus}`}>
-                  {pinging ? '…' : pingStatus === 'ok' ? 'Online' : pingStatus === 'fail' ? 'Offline' : '—'}
-                </span>
-                <button className="btn-ghost hw-ping-btn" onClick={ping} disabled={pinging}>
-                  {pinging ? <span className="spinner" /> : 'Ping'}
-                </button>
-              </div>
+          <div className="hw-status-col">
+            <div className="hw-ping-row">
+              <span className={`hw-badge hw-badge--${pingStatus}`}>
+                {pinging ? '…' : online ? 'Online' : pingStatus === 'fail' ? 'Offline' : 'Checking…'}
+              </span>
+              <button className="btn-ghost hw-ping-btn" onClick={ping} disabled={pinging}>
+                {pinging ? <span className="spinner" /> : 'Ping'}
+              </button>
             </div>
-          )}
+          </div>
         </div>
-
-        {!selectedStation && (
-          <p className="hw-select-hint">
-            {stations.length === 0
-              ? 'No stations configured — go to Configure to add one. Node readings auto-detect below.'
-              : 'Select a station above to enable turret controls.'}
-          </p>
+        {!online && pingStatus === 'fail' && (
+          <p className="hw-select-hint">Base offline — connect your device to <strong>Turret-ESP32</strong> WiFi.</p>
         )}
       </div>
 
-      {/* ── Turret controls (only when station selected) ── */}
-      {selectedStation && (
+      {/* ── Turret controls — always shown, disabled when offline ── */}
+      {online && (
         <>
           <EmergencyStop api={api} />
           <AimPanel api={api} />
@@ -428,8 +398,8 @@ function TurretTab() {
         </>
       )}
 
-      {/* ── Node sensor readings — always visible, auto-polls 192.168.4.1 ── */}
-      <NodeReadingsPanel api={nodeApi} />
+      {/* ── Node sensor readings — always visible ── */}
+      <NodeReadingsPanel api={api} />
     </div>
   );
 }

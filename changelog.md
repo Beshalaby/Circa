@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.2 — 2026-03-28
+
+- **Client — auto-detect base station** (`ControlPage.tsx`): Removed manual station selector from Turret tab. Base station at `192.168.4.1` is now auto-detected on load (same as nodes). Shows Online/Offline badge and pings on mount. Controls appear automatically when online.
+
 ## 0.6.1 — 2026-03-28
 
 - **Node firmware** (`firmware/node/src/main.cpp`): Calibrated for capacitive-style LM393 sensor at 3.3V.

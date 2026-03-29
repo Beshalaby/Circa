@@ -242,6 +242,8 @@
   justify-content: center;
 }
 .hw-select-hint { font-size: 13px; color: var(--gray-500); text-align: center; padding: 8px 0; }
+.hw-auto-info { display: flex; flex-direction: column; gap: 2px; }
+.hw-auto-hint { font-size: 11px; color: var(--gray-500); margin-top: 2px; }
 
 
 /* Panel sections */
