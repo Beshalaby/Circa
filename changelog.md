@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.1 — 2026-03-28
+
+- **Node firmware** (`firmware/node/src/main.cpp`): Calibrated for capacitive-style LM393 sensor at 3.3V.
+  - AO pin: **D32 (GPIO32)** — ADC1, compatible with WiFi/ESP-NOW.
+  - Calibration: `DRY_RAW=4095` (in air), `WET_RAW=3000` (in water ~1700-2700).
+  - Switched from deep sleep to **continuous loop** — sensor stays powered for stable readings.
+  - `soil_wet` now derived from AO percentage (≥50% = wet) instead of unreliable DO pin.
+  - 2s warm-up delay on start + 16-sample averaging for noise reduction.
+
 ## 0.6.0 — 2026-03-28
 
 - **Node firmware** (`firmware/node/src/main.cpp`): Switched back to **broadcast ESP-NOW** — more reliable when the base runs SoftAP (no unicast ACK issues). Sleep restored to 30 s.

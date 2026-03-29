@@ -3,11 +3,12 @@
 //
 // Communication: ESP-NOW unicast → Base Station MAC
 // Sensors:
-//   GPIO 18 = DO  (digital threshold; LOW = wet, HIGH = dry)
-//   GPIO 34 = AO  (analog moisture reading)
+//   GPIO 35 = DO  (D35 pin label on board)
+//   GPIO 36 = AO  (VP pin label on board = GPIO36)
 //     ⚠ NOTE: Move AO wire from D19 → D34. GPIO19 is not ADC-capable on ESP32.
 //
-// Behaviour: wake → read → send → deep-sleep (SLEEP_SECONDS)
+// Behaviour: always-on loop — read every SLEEP_SECONDS, no deep sleep
+// Sensor stays powered for stable AO readings (no warm-up jitter)
 // ─────────────────────────────────────────────────────────────────────────────
 
 #include <Arduino.h>
@@ -19,12 +20,12 @@
 #define NODE_ID  "node-001"
 
 // ── Sensor pins ───────────────────────────────────────────────────────────────
-#define SOIL_DO_PIN  18
-#define SOIL_AO_PIN  34
+#define SOIL_DO_PIN  35
+#define SOIL_AO_PIN  32   // D32 = GPIO32, ADC1_CH4, works with WiFi
 
-// ── Calibration ───────────────────────────────────────────────────────────────
-#define SOIL_DRY_RAW  3200
-#define SOIL_WET_RAW  1500
+// ── Calibration — capacitive: HIGH = dry, LOW = wet ──────────────────────────
+#define SOIL_DRY_RAW  4095   // in open air (consistent)
+#define SOIL_WET_RAW  3000   // fully wet threshold — readings below this = 100%
 
 // ── Timing ────────────────────────────────────────────────────────────────────
 #define SLEEP_SECONDS  30
@@ -54,7 +55,16 @@ static volatile bool sendOK   = false;
 // ─────────────────────────────────────────────────────────────────────────────
 
 float readSoilPct() {
-  int raw = analogRead(SOIL_AO_PIN);
+  delay(500);  // let resistive sensor output settle after wake
+  long sum = 0;
+  for (int i = 0; i < 16; i++) {
+    sum += analogRead(SOIL_AO_PIN);
+    delay(10);
+  }
+  int raw = (int)(sum / 16);
+  Serial.printf("[Node] avg_raw=%d\n", raw);
+  // HIGH = dry, LOW = wet
+  bool doWet = (digitalRead(SOIL_DO_PIN) == LOW);
   float pct = (float)(SOIL_DRY_RAW - raw) / (float)(SOIL_DRY_RAW - SOIL_WET_RAW) * 100.0f;
   return constrain(pct, 0.0f, 100.0f);
 }
@@ -68,14 +78,17 @@ void IRAM_ATTR onSendDone(const uint8_t *mac, esp_now_send_status_t status) {
 // Setup — runs once per wake cycle, then deep-sleeps
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Setup — runs once, WiFi + ESP-NOW init
+// ─────────────────────────────────────────────────────────────────────────────
+
 void setup() {
   Serial.begin(115200);
   delay(100);
-  Serial.printf("\n[Node %s] Wake\n", NODE_ID);
+  Serial.printf("\n[Node %s] Start\n", NODE_ID);
 
   pinMode(SOIL_DO_PIN, INPUT);
 
-  // WIFI_STA mode — simplest for ESP-NOW sender
   WiFi.mode(WIFI_STA);
   WiFi.disconnect();
   delay(100);
@@ -86,13 +99,13 @@ void setup() {
   Serial.printf("[WiFi] Channel set to %d (actual=%d)\n", WIFI_CHANNEL, ch);
 
   if (esp_now_init() != ESP_OK) {
-    Serial.println("[ESP-NOW] Init failed — sleeping");
-    esp_deep_sleep(SLEEP_SECONDS * 1000000ULL);
+    Serial.println("[ESP-NOW] Init failed — rebooting in 5s");
+    delay(5000);
+    ESP.restart();
     return;
   }
   esp_now_register_send_cb(onSendDone);
 
-  // Register base station as unicast peer
   esp_now_peer_info_t peer = {};
   memcpy(peer.peer_addr, BASE_ADDR, 6);
   peer.channel = WIFI_CHANNEL;
@@ -101,24 +114,33 @@ void setup() {
   esp_err_t add_err = esp_now_add_peer(&peer);
   Serial.printf("[ESP-NOW] Peer add err=%d\n", add_err);
 
-  // Read sensors
+  // Let sensor warm up after power-on
+  Serial.println("[Node] Sensor warm-up 2s...");
+  delay(2000);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Loop — read + send every SLEEP_SECONDS, no deep sleep
+// ─────────────────────────────────────────────────────────────────────────────
+
+void loop() {
   NodePacket pkt = {};
   strlcpy(pkt.id, NODE_ID, sizeof(pkt.id));
   pkt.soil_pct = readSoilPct();
-  pkt.soil_wet = (digitalRead(SOIL_DO_PIN) == LOW);
-  Serial.printf("[Node %s] soil=%.1f%%  wet=%s\n", NODE_ID, pkt.soil_pct, pkt.soil_wet ? "YES" : "NO");
+  int rawAo = analogRead(SOIL_AO_PIN);
+  pkt.soil_wet = pkt.soil_pct >= 50.0f;  // wet if moisture >= 50%
+  Serial.printf("[Node %s] raw_AO=%d  soil=%.1f%%  wet=%s  DO=%s\n",
+    NODE_ID, rawAo, pkt.soil_pct,
+    pkt.soil_wet ? "YES" : "NO",
+    digitalRead(SOIL_DO_PIN) == LOW ? "LOW(wet)" : "HIGH(dry)");
 
-  // Send unicast to base
+  sendDone = false; sendOK = false;
   esp_err_t send_err = esp_now_send(BASE_ADDR, (const uint8_t *)&pkt, sizeof(pkt));
   Serial.printf("[ESP-NOW] Send queued err=%d\n", send_err);
 
-  // Wait for callback
   uint32_t t0 = millis();
   while (!sendDone && millis() - t0 < 1000) delay(5);
-  Serial.printf("[Node %s] Send %s — sleeping %ds\n", NODE_ID, sendOK ? "OK" : "FAIL", SLEEP_SECONDS);
+  Serial.printf("[Node %s] Send %s — next in %ds\n", NODE_ID, sendOK ? "OK" : "FAIL", SLEEP_SECONDS);
 
-  delay(50);
-  esp_deep_sleep(SLEEP_SECONDS * 1000000ULL);
+  delay(SLEEP_SECONDS * 1000UL);
 }
-
-void loop() {}
