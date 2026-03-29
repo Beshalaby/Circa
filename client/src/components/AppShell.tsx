@@ -1,6 +1,6 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import type { IconType } from 'react-icons';
-import { FiGrid, FiSettings, FiSliders } from 'react-icons/fi';
+import { FiGrid, FiSettings, FiSliders, FiTrendingUp } from 'react-icons/fi';
 import { useFieldStore } from '../lib/socket';
 import CircaLogo from './CircaLogo';
 import './AppShell.css';
@@ -8,7 +8,8 @@ import './AppShell.css';
 const NAV = [
   { to: '/dashboard', icon: FiGrid,     label: 'Dashboard' },
   { to: '/configure', icon: FiSettings, label: 'Configure' },
-  { to: '/control',   icon: FiSliders,  label: 'Control' },
+  { to: '/control',   icon: FiSliders,    label: 'Control' },
+  { to: '/prediction', icon: FiTrendingUp, label: 'Prediction' },
 ] satisfies Array<{ to: string; icon: IconType; label: string }>;
 
 export default function AppShell() {

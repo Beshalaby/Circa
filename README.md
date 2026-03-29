@@ -36,7 +36,7 @@ cp server/.env.example server/.env
 
 # Frontend
 cp client/.env.example client/.env
-# Fill in: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, VITE_SOCKET_URL=http://localhost:3001
+# Fill in: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, VITE_SOCKET_URL=http://localhost:3001, VITE_PREDICTOR_URL=http://localhost:8000
 # Optional: VITE_GEMINI_API_KEY (for AI chat)
 ```
 

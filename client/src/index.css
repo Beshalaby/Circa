@@ -24,8 +24,8 @@
   --orange: #c2410c;
 
   /* ── Typography ─────────────────────────────────── */
-  --font-sans: 'Inter', 'DM Sans', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+  --font-sans: 'Onest', system-ui, sans-serif;
+  --font-mono: 'Space Mono', monospace;
 
   /* ── Spacing / Radius ───────────────────────────── */
   --radius-sm: 6px;

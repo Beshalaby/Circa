@@ -6,6 +6,7 @@ import LandingPage from './pages/LandingPage';
 import DashboardPage from './pages/DashboardPage';
 import ConfigurePage from './pages/ConfigurePage';
 import ControlPage from './pages/ControlPage';
+import PredictionPage from './pages/PredictionPage';
 import './App.css';
 
 export default function App() {
@@ -22,6 +23,7 @@ export default function App() {
           <Route path="/configure" element={<ConfigurePage />} />
           <Route path="/pair"      element={<Navigate to="/configure" replace />} />
           <Route path="/control"   element={<ControlPage />} />
+          <Route path="/prediction" element={<PredictionPage />} />
           <Route path="*"          element={<Navigate to="/dashboard" replace />} />
         </Route>
       </Routes>
