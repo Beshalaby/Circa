@@ -1,6 +1,7 @@
 /* LandingPage.css — ASCII editorial landing */
 
 .landing {
+  --landing-inline-pad: clamp(18px, 4vw, 44px);
   position: relative;
   width: 100%;
   max-width: 100%;
@@ -17,15 +18,15 @@
 /* ── Header ─────────────────────────────────────────── */
 .landing-header {
   position: absolute;
-  top: 0; left: 0; right: 0;
+  top: 0;
+  left: max(var(--landing-inline-pad), env(safe-area-inset-left));
+  right: max(var(--landing-inline-pad), env(safe-area-inset-right));
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-  padding: 18px 28px;
-  padding-left: max(28px, env(safe-area-inset-left));
-  padding-right: max(28px, env(safe-area-inset-right));
+  padding: 18px 0;
   z-index: 20;
   box-sizing: border-box;
   max-width: 100%;
@@ -100,10 +101,11 @@
 /* ── Main content: headline centered, info row at bottom ─ */
 .landing-content {
   position: absolute;
-  inset: 0;
-  padding: 0 28px;
-  padding-left: max(28px, env(safe-area-inset-left));
-  padding-right: max(28px, env(safe-area-inset-right));
+  top: 0;
+  bottom: 0;
+  left: max(var(--landing-inline-pad), env(safe-area-inset-left));
+  right: max(var(--landing-inline-pad), env(safe-area-inset-right));
+  padding: 0;
   z-index: 10;
   pointer-events: none;
   max-width: 100%;
