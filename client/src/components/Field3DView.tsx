@@ -212,18 +212,17 @@ function Station3D({
   const groupRef = useRef<THREE.Group>(null);
   const glowRef = useRef<THREE.MeshBasicMaterial>(null);
   const { x, z } = toXZ(station.field_x, station.field_y, vertices);
-  const online = station.online;
-  const col = online ? '#c4972a' : '#9e9991';
-  const em  = online ? '#b07a14' : '#706b65';
+  const col = '#c4972a';
+  const em  = '#b07a14';
   const turretR = station.turret_range_m ?? DEFAULT_TURRET_THROW_RADIUS_M;
 
   useFrame(({ clock }) => {
     const t = clock.elapsedTime;
-    if (groupRef.current && online) {
+    if (groupRef.current) {
       const sc = 1 + Math.sin(t * 1.4) * 0.012;
       groupRef.current.scale.set(sc, 1, sc);
     }
-    if (glowRef.current && online) {
+    if (glowRef.current) {
       glowRef.current.opacity = 0.12 + Math.sin(t * 1.9) * 0.07;
     }
   });
@@ -279,23 +278,19 @@ function Station3D({
         </mesh>
 
         {/* Online glow ring */}
-        {online && (
-          <mesh position={[0, 0.22 * ms, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-            <ringGeometry args={[1.6 * ms, 2.8 * ms, 48]} />
-            <meshBasicMaterial ref={glowRef} color="#c4972a" transparent opacity={0.18} depthWrite={false} />
-          </mesh>
-        )}
+        <mesh position={[0, 0.22 * ms, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[1.6 * ms, 2.8 * ms, 48]} />
+          <meshBasicMaterial ref={glowRef} color="#c4972a" transparent opacity={0.18} depthWrite={false} />
+        </mesh>
 
         {/* Point light glow */}
-        {online && (
-          <pointLight
-            position={[0, 4.5 * ms, 0]}
-            color="#c4972a"
-            intensity={ms * 0.9}
-            distance={turretR * 0.55}
-            decay={2}
-          />
-        )}
+        <pointLight
+          position={[0, 4.5 * ms, 0]}
+          color="#c4972a"
+          intensity={ms * 0.9}
+          distance={turretR * 0.55}
+          decay={2}
+        />
       </group>
     </group>
   );
@@ -319,21 +314,16 @@ function Node3D({
   const gemRef = useRef<THREE.Mesh>(null);
   const glowMatRef = useRef<THREE.MeshBasicMaterial>(null);
   const { x, z } = toXZ(node.field_x, node.field_y, vertices);
-  const online = node.online;
   const col = moistureCol(node.soil_moisture);
   const irrR = node.irrigation_radius_m ?? DEFAULT_NODE_IRRIGATION_RADIUS_M;
 
   useFrame(({ clock }) => {
     const t = clock.elapsedTime;
     if (gemRef.current) {
-      if (online) {
-        gemRef.current.rotation.y = t * 0.45;
-        gemRef.current.position.y = 0.7 * ms + Math.sin(t * 1.3 + x * 0.08) * 0.1 * ms;
-      } else {
-        gemRef.current.position.y = 0.7 * ms;
-      }
+      gemRef.current.rotation.y = t * 0.45;
+      gemRef.current.position.y = 0.7 * ms + Math.sin(t * 1.3 + x * 0.08) * 0.1 * ms;
     }
-    if (glowMatRef.current && online) {
+    if (glowMatRef.current) {
       glowMatRef.current.opacity = 0.1 + Math.sin(t * 2.3 + z * 0.08) * 0.06;
     }
   });
@@ -383,28 +373,24 @@ function Node3D({
           roughness={0.15}
           metalness={0.5}
           emissive={col}
-          emissiveIntensity={online ? 0.4 : 0.05}
+          emissiveIntensity={0.4}
         />
       </mesh>
 
       {/* Ground glow disc */}
-      {online && (
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]}>
-          <circleGeometry args={[0.75 * ms, 32]} />
-          <meshBasicMaterial ref={glowMatRef} color={col} transparent opacity={0.12} depthWrite={false} />
-        </mesh>
-      )}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]}>
+        <circleGeometry args={[0.75 * ms, 32]} />
+        <meshBasicMaterial ref={glowMatRef} color={col} transparent opacity={0.12} depthWrite={false} />
+      </mesh>
 
       {/* Point light */}
-      {online && (
-        <pointLight
-          position={[0, 0.7 * ms, 0]}
-          color={col}
-          intensity={ms * 0.28}
-          distance={irrR * 0.85}
-          decay={2}
-        />
-      )}
+      <pointLight
+        position={[0, 0.7 * ms, 0]}
+        color={col}
+        intensity={ms * 0.28}
+        distance={irrR * 0.85}
+        decay={2}
+      />
     </group>
   );
 }
@@ -574,9 +560,6 @@ export default function Field3DView({
     [cx, cz], // recalculate only when the field polygon changes
   );
 
-  const onlineStations = stations.filter((s) => s.online).length;
-  const onlineNodes = nodes.filter((n) => n.online).length;
-
   return (
     <div className="field-3d-view">
       <Canvas
@@ -608,11 +591,11 @@ export default function Field3DView({
         <div className="field-3d-hud-counts">
           <span className="field-3d-hud-item mono">
             <span className="field-3d-hud-dot field-3d-hud-dot--station" />
-            {onlineStations}/{stations.length} stations
+            {stations.length} stations
           </span>
           <span className="field-3d-hud-item mono">
             <span className="field-3d-hud-dot field-3d-hud-dot--node" />
-            {onlineNodes}/{nodes.length} nodes
+            {nodes.length} nodes
           </span>
         </div>
       </div>

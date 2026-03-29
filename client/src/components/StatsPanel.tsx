@@ -109,7 +109,6 @@ function StationRow({
   const inner = (
     <>
       <div className="device-row-left">
-        <span className={`dot ${station.online ? 'dot-green' : 'dot-red'}`} />
         <div>
           <p className="device-name">{station.name}</p>
           <p className="device-id mono">{station.id}</p>
@@ -158,7 +157,6 @@ function NodeRow({
   const inner = (
     <>
       <div className="device-row-left">
-        <span className={`dot ${node.online ? 'dot-green' : 'dot-red'}`} />
         <div>
           <p className="device-name">{node.name}</p>
           <p className="device-id mono">{node.id}</p>

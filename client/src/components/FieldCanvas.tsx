@@ -346,12 +346,12 @@ function StationMarker({
   const ms = markerScale;
   const turretR = station.turret_range_m ?? DEFAULT_TURRET_THROW_RADIUS_M;
   useFrame(({ clock }) => {
-    if (grp.current && station.online) {
+    if (grp.current) {
       const s = 1 + Math.sin(clock.elapsedTime * 1.6) * 0.025;
       grp.current.scale.setScalar(s);
     }
   });
-  const col = station.online ? '#6b5344' : '#9e9991';
+  const col = '#6b5344';
   return (
     <group position={[x, 0, z]}>
       {showRadii && (
@@ -406,7 +406,7 @@ function NodeMarker({
   const col = moistureHex(node.soil_moisture);
   const irrR = node.irrigation_radius_m ?? DEFAULT_NODE_IRRIGATION_RADIUS_M;
   useFrame(({ clock }) => {
-    if (meshRef.current && node.online) {
+    if (meshRef.current) {
       meshRef.current.rotation.y = clock.elapsedTime * 0.35;
     }
   });
@@ -435,7 +435,7 @@ function NodeMarker({
         roughness={0.45}
         metalness={0.2}
         emissive={col}
-        emissiveIntensity={node.online ? 0.08 : 0.02}
+        emissiveIntensity={0.08}
       />
       </mesh>
     </group>
@@ -663,10 +663,6 @@ function Inspector({
                 ? `${item.soil_moisture!.toFixed(1)}%`
                 : '—'}
           </dd>
-        </div>
-        <div>
-          <dt>Status</dt>
-          <dd className="mono">{item.online ? 'online' : 'offline'}</dd>
         </div>
         {isStation ? (
           <div>

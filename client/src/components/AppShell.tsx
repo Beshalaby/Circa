@@ -1,7 +1,6 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import type { IconType } from 'react-icons';
 import { FiGrid, FiSettings, FiSliders, FiTrendingUp } from 'react-icons/fi';
-import { useFieldStore } from '../lib/socket';
 import CircaLogo from './CircaLogo';
 import './AppShell.css';
 
@@ -13,7 +12,6 @@ const NAV = [
 ] satisfies Array<{ to: string; icon: IconType; label: string }>;
 
 export default function AppShell() {
-  const connected = useFieldStore((s) => s.connected);
   const location = useLocation();
 
   const activeLabel = NAV.find((n) => location.pathname.startsWith(n.to))?.label ?? '';
@@ -46,12 +44,7 @@ export default function AppShell() {
       <div className="main-content">
         <header className="top-bar">
           <span className="top-bar-title">{activeLabel}</span>
-          <div className="top-bar-right">
-            <div className={`conn-pill ${connected ? 'online' : 'offline'}`}>
-              <span className="dot" />
-              {connected ? 'Live' : 'Offline'}
-            </div>
-          </div>
+          <div className="top-bar-right" />
         </header>
         <div className="page-content fade-in">
           <Outlet />

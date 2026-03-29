@@ -8,7 +8,6 @@ import {
   FiCheckCircle,
   FiClock,
   FiDroplet,
-  FiMessageSquare,
   FiPlay,
   FiPlus,
   FiPower,
@@ -33,7 +32,6 @@ import type { HardwareResult, StepperDir, NodeReading } from '../lib/turretApi';
 import './ControlPage.css';
 
 const SERVER = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
-const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 
 // ── Types ────────────────────────────────────────────────────
 interface Schedule {
@@ -47,7 +45,7 @@ interface Schedule {
   created_at: string;
 }
 
-type Tab = 'scheduler' | 'turret' | 'chat';
+type Tab = 'scheduler' | 'turret';
 
 export default function ControlPage() {
   const [activeTab, setActiveTab] = useState<Tab>('scheduler');
@@ -58,14 +56,12 @@ export default function ControlPage() {
       <div className="control-tabs">
         <TabBtn id="tab-scheduler" label="Scheduler" Icon={FiCalendar}      active={activeTab === 'scheduler'} onClick={() => setActiveTab('scheduler')} />
         <TabBtn id="tab-turret"    label="Turret"    Icon={FiSliders}       active={activeTab === 'turret'}    onClick={() => setActiveTab('turret')} />
-        <TabBtn id="tab-chat"      label="AI Chat"   Icon={FiMessageSquare} active={activeTab === 'chat'}      onClick={() => setActiveTab('chat')} />
-        <div className="tab-indicator" style={{ '--idx': ['scheduler','turret','chat'].indexOf(activeTab) } as any} />
+        <div className="tab-indicator" style={{ '--idx': ['scheduler','turret'].indexOf(activeTab) } as any} />
       </div>
 
       <div className="control-body fade-in" key={activeTab}>
         {activeTab === 'scheduler' && <SchedulerTab />}
         {activeTab === 'turret'    && <TurretTab />}
-        {activeTab === 'chat'      && <AIChatTab />}
       </div>
     </div>
   );
@@ -342,21 +338,6 @@ function ScheduleForm({ stations, onCancel, onCreated }: {
 function TurretTab() {
   const api = useMemo(() => new TurretApiClient('http://192.168.4.1', SERVER, true), []);
 
-  const [pingStatus, setPingStatus] = useState<'idle' | 'ok' | 'fail'>('idle');
-  const [pinging, setPinging]       = useState(false);
-
-  const ping = useCallback(async () => {
-    setPinging(true);
-    const r = await api.ping();
-    setPingStatus(r.ok ? 'ok' : 'fail');
-    setPinging(false);
-  }, [api]);
-
-  // Auto-detect on mount
-  useEffect(() => { ping(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const online = pingStatus === 'ok';
-
   return (
     <div className="turret-tab">
       <h2 className="ctrl-section-title">Hardware Control</h2>
@@ -370,32 +351,15 @@ function TurretTab() {
             <span className="hw-url mono">http://192.168.4.1</span>
             <span className="hw-auto-hint">Auto-detected — connect to Turret-ESP32 WiFi</span>
           </div>
-          <div className="hw-status-col">
-            <div className="hw-ping-row">
-              <span className={`hw-badge hw-badge--${pingStatus}`}>
-                {pinging ? '…' : online ? 'Online' : pingStatus === 'fail' ? 'Offline' : 'Checking…'}
-              </span>
-              <button className="btn-ghost hw-ping-btn" onClick={ping} disabled={pinging}>
-                {pinging ? <span className="spinner" /> : 'Ping'}
-              </button>
-            </div>
-          </div>
         </div>
-        {!online && pingStatus === 'fail' && (
-          <p className="hw-select-hint">Base offline — connect your device to <strong>Turret-ESP32</strong> WiFi.</p>
-        )}
       </div>
 
-      {/* ── Turret controls — always shown, disabled when offline ── */}
-      {online && (
-        <>
-          <EmergencyStop api={api} />
-          <AimPanel api={api} />
-          <StepperPanel api={api} />
-          <ServoPanel api={api} />
-          <PumpPanel api={api} />
-        </>
-      )}
+      {/* ── Turret controls — always shown ── */}
+      <EmergencyStop api={api} />
+      <AimPanel api={api} />
+      <StepperPanel api={api} />
+      <ServoPanel api={api} />
+      <PumpPanel api={api} />
 
       {/* ── Node sensor readings — always visible ── */}
       <NodeReadingsPanel api={api} />
@@ -891,111 +855,4 @@ function NodeReadingsPanel({ api }: { api: TurretApiClient }) {
   );
 }
 
-// ────────────────────────────────────────────────────────────
-// AI CHAT TAB
-// ────────────────────────────────────────────────────────────
-interface Message { role: 'user' | 'assistant'; content: string; }
 
-const SYSTEM_PROMPT = `You are Circa AI, an assistant for a smart farming irrigation system. 
-The user has ESP32-based turret base stations that can fire water at specific angles, and sensor nodes measuring soil moisture.
-Help the user create automation schedules using natural language. When creating a schedule, output a JSON object like:
-{ "name": "...", "trigger": { "type": "condition"|"time", ... }, "actions": [...] }
-Be concise and practical. Focus on water efficiency.`;
-
-async function callGemini(messages: Message[]): Promise<string> {
-  if (!GEMINI_KEY) {
-    return "Warning: No Gemini API key configured. Add VITE_GEMINI_API_KEY to your .env file to enable AI chat.";
-  }
-
-  const contents = messages.map((m) => ({
-    role: m.role === 'user' ? 'user' : 'model',
-    parts: [{ text: m.content }],
-  }));
-
-  const r = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
-        contents,
-        generationConfig: { temperature: 0.7, maxOutputTokens: 1024 },
-      }),
-    }
-  );
-
-  if (!r.ok) throw new Error(`Gemini error: ${r.status}`);
-  const data = await r.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response';
-}
-
-function AIChatTab() {
-  const [messages, setMessages] = useState<Message[]>([
-    { role: 'assistant', content: 'Hi! I\'m Circa AI. Tell me what you want to automate — for example: "Water the north field when soil moisture drops below 30%." I\'ll help you create a schedule.' },
-  ]);
-  const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const endRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  const send = async () => {
-    if (!input.trim() || loading) return;
-    const userMsg: Message = { role: 'user', content: input.trim() };
-    const next = [...messages, userMsg];
-    setMessages(next);
-    setInput('');
-    setLoading(true);
-
-    try {
-      const reply = await callGemini(next);
-      setMessages((m) => [...m, { role: 'assistant', content: reply }]);
-    } catch (e: any) {
-      setMessages((m) => [...m, { role: 'assistant', content: `Error: ${e.message}` }]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="chat-tab">
-      <div className="chat-header">
-        <h2 className="ctrl-section-title">AI Schedule Assistant</h2>
-        <p className="ctrl-section-sub">Describe automations in natural language — powered by Gemini</p>
-      </div>
-
-      <div className="chat-messages">
-        {messages.map((m, i) => (
-          <div key={i} className={`chat-message ${m.role}`}>
-            <div className="chat-bubble">
-              <pre className="chat-text">{m.content}</pre>
-            </div>
-          </div>
-        ))}
-        {loading && (
-          <div className="chat-message assistant">
-            <div className="chat-bubble"><div className="typing-dots"><span/><span/><span/></div></div>
-          </div>
-        )}
-        <div ref={endRef} />
-      </div>
-
-      <div className="chat-input-row">
-        <input
-          id="chat-input"
-          className="input"
-          placeholder="e.g. Water zone 2 every morning at 6am..."
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && send()}
-        />
-        <button id="chat-send" className="btn-primary" disabled={!input.trim() || loading} onClick={send}>
-          Send
-        </button>
-      </div>
-    </div>
-  );
-}

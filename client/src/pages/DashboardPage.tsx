@@ -66,11 +66,6 @@ function DeviceInspector({
         </button>
       </div>
 
-      <div className="dashboard-inspector-status">
-        <span className={`dot ${item.online ? 'dot-green' : 'dot-red'}`} />
-        <span className="dashboard-inspector-status-label">{item.online ? 'Online' : 'Offline'}</span>
-      </div>
-
       <div className="dashboard-inspector-section">
         <p className="dashboard-inspector-section-title mono">Sensors</p>
 
@@ -163,9 +158,6 @@ export default function DashboardPage() {
     return hs.length ? hs.reduce((a, b) => a + b, 0) / hs.length : null;
   })();
 
-  const onlineStations = stations.filter((s) => s.online).length;
-  const onlineNodes = nodes.filter((n) => n.online).length;
-
   const kpis: {
     label: string;
     value: string;
@@ -180,13 +172,13 @@ export default function DashboardPage() {
     { label: 'Humidity', value: avgHumidity !== null ? `${avgHumidity.toFixed(1)}%` : '—', tone: 'normal' },
     {
       label: 'Base stations',
-      value: `${onlineStations} / ${stations.length}`,
-      tone: onlineStations < stations.length ? 'warn' : 'normal',
+      value: `${stations.length}`,
+      tone: 'normal',
     },
     {
       label: 'Nodes',
-      value: `${onlineNodes} / ${nodes.length}`,
-      tone: onlineNodes < nodes.length ? 'warn' : 'normal',
+      value: `${nodes.length}`,
+      tone: 'normal',
     },
   ];
 
