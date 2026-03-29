@@ -27,9 +27,12 @@ function AsciiField() {
     if (!el) return;
 
     function sizeGrid() {
+      const node = canvasRef.current;
+      if (!node) return;
+
       // Never wider than the container (nowrap rows) — avoids document horizontal scroll
-      const w = el.clientWidth;
-      const h = el.clientHeight;
+      const w = node.clientWidth;
+      const h = node.clientHeight;
       const cols = Math.max(1, Math.floor(w / CHAR_W));
       const rows = Math.max(1, Math.floor(h / CHAR_H) + 1);
       gridRef.current = buildGrid(cols, rows);

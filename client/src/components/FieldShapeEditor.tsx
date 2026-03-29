@@ -198,9 +198,9 @@ function HoveredEdgeHighlight() {
   }, [geo]);
   if (!geo) return null;
   return (
-    <line geometry={geo}>
+    <lineSegments geometry={geo}>
       <lineBasicMaterial color="#2d5f82" />
-    </line>
+    </lineSegments>
   );
 }
 

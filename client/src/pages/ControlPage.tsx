@@ -23,7 +23,6 @@ import {
   FiXCircle,
 } from 'react-icons/fi';
 import { useFieldStore } from '../lib/socket';
-import { useHardwareStore } from '../lib/hardwareStore';
 import {
   TurretApiClient,
   SPEED_MIN, SPEED_MAX, SPEED_DEFAULT,

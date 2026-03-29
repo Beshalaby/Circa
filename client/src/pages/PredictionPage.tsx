@@ -78,6 +78,11 @@ interface PredictorPredictionOut {
   fallback_used: boolean;
 }
 
+interface PredictorAllPredictionsOut {
+  predictions: PredictorPredictionOut[];
+  fetched_at: string;
+}
+
 interface PredictorSensorReadingOut {
   id: string;
   timestamp: string;
@@ -173,9 +178,46 @@ function average(values: Array<number | null | undefined>, places = 1): number |
 async function fetchJson<T>(url: string): Promise<T> {
   const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(`Request failed (${response.status}) for ${url}`);
+    let detail = '';
+    try {
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const payload = await response.json() as { detail?: unknown };
+        if (typeof payload.detail === 'string') {
+          detail = payload.detail;
+        } else if (payload.detail !== undefined) {
+          detail = JSON.stringify(payload.detail);
+        }
+      } else {
+        detail = (await response.text()).trim();
+      }
+    } catch {
+      // Keep base error when response parsing fails.
+    }
+
+    throw new Error(
+      `Request failed (${response.status}) for ${url}${detail ? `: ${detail}` : ''}`,
+    );
   }
   return (await response.json()) as T;
+}
+
+async function fetchPredictionForCluster(clusterId: ClusterId): Promise<PredictorPredictionOut> {
+  try {
+    const all = await fetchJson<PredictorAllPredictionsOut>(
+      `${PREDICTOR_BASE_URL}/api/v1/predictions/all`,
+    );
+    const fromAll = all.predictions.find((row) => row.cluster_id === clusterId);
+    if (fromAll) {
+      return fromAll;
+    }
+  } catch {
+    // Fallback to single-cluster endpoint for older/backward-incompatible backends.
+  }
+
+  return fetchJson<PredictorPredictionOut>(
+    `${PREDICTOR_BASE_URL}/api/v1/predictions/${clusterId}`,
+  );
 }
 
 async function fetchClusterBundle(clusterId: ClusterId): Promise<{
@@ -193,11 +235,19 @@ async function fetchClusterBundle(clusterId: ClusterId): Promise<{
     limit: '10000',
   });
 
-  const [prediction, history, latestByCluster] = await Promise.all([
-    fetchJson<PredictorPredictionOut>(`${PREDICTOR_BASE_URL}/api/v1/predictions/${clusterId}`),
+  const [predictionRes, historyRes, latestRes] = await Promise.allSettled([
+    fetchPredictionForCluster(clusterId),
     fetchJson<PredictorSensorReadingOut[]>(`${PREDICTOR_BASE_URL}/api/v1/sensors/history?${historyParams.toString()}`),
     fetchJson<PredictorLatestReadingsByCluster[]>(`${PREDICTOR_BASE_URL}/api/v1/sensors/latest`),
   ]);
+
+  if (predictionRes.status === 'rejected') {
+    throw predictionRes.reason;
+  }
+
+  const prediction = predictionRes.value;
+  const history = historyRes.status === 'fulfilled' ? historyRes.value : [];
+  const latestByCluster = latestRes.status === 'fulfilled' ? latestRes.value : [];
 
   const latestForCluster = latestByCluster.find((row) => row.cluster_id === clusterId)?.nodes ?? [];
 
