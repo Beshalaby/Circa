@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# PlatformIO / firmware build
+**/.pio/
+.pio/
+
+# Vite / TypeScript build
+client/dist/
+dist/
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+*.pem
+
+# Local runtime data (stations DB from server)
+server/data/stations.json
+
+# Local tooling (paths often machine-specific)
+.claude/
+
+# OS / editor
+.DS_Store
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*

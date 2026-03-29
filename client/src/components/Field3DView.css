@@ -1,0 +1,93 @@
+/* Field3DView.css — perspective 3D field for the dashboard (white / editorial theme) */
+
+.field-3d-view {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 180px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+/* Force R3F canvas to fill parent */
+.field-3d-view > canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* ── HUD overlay ──────────────────────────────────── */
+
+.field-3d-hud {
+  position: absolute;
+  bottom: 14px;
+  left: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.field-3d-hud-tag {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(156, 107, 18, 0.7);
+  line-height: 1;
+}
+
+.field-3d-hud-counts {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.field-3d-hud-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(15, 14, 12, 0.55);
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.field-3d-hud-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.field-3d-hud-dot--station {
+  background: #c4972a;
+  box-shadow: 0 0 5px rgba(196, 151, 42, 0.55);
+}
+
+.field-3d-hud-dot--node {
+  background: #2d9e5f;
+  box-shadow: 0 0 5px rgba(45, 158, 95, 0.5);
+}
+
+/* ── Empty state ──────────────────────────────────── */
+
+.field-3d-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.field-3d-empty p {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: rgba(15, 14, 12, 0.28);
+  margin: 0;
+}

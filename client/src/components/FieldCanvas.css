@@ -1,0 +1,139 @@
+/* Bird's-eye 3D field — preview (dashboard) vs full (/field)
+   Avoid height:100% on preview: many parents only have min-height / flex:auto, so % height
+   collapses and the R3F canvas gets 0×0. Preview uses aspect-ratio for a real box. */
+
+.field-canvas-container {
+  position: relative;
+  width: 100%;
+  background: #ffffff;
+  touch-action: none;
+  overflow: hidden;
+}
+
+.field-canvas-container--preview {
+  min-height: 200px;
+  aspect-ratio: 1 / 1;
+  max-height: min(360px, 52vh);
+}
+
+/* Add-device modal: fixed frame (not aspect-ratio) */
+.field-canvas-container--modal-picker.field-canvas-container--preview {
+  aspect-ratio: auto;
+  height: 230px;
+  min-height: 220px;
+  max-height: 260px;
+}
+
+.field-canvas-container--placing .field-canvas-gl {
+  cursor: crosshair;
+}
+
+.field-canvas-container--full {
+  flex: 1 1 auto;
+  min-height: 320px;
+  height: 100%;
+}
+
+.field-canvas-gl {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Inspector */
+.field-inspector {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 4;
+  width: min(15rem, calc(100% - 20px));
+  padding: 12px 14px 14px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--gray-100);
+  border-left: 3px solid var(--brown);
+  box-shadow: 0 2px 12px rgba(15, 14, 12, 0.06);
+  pointer-events: auto;
+}
+
+.field-canvas-container--preview .field-inspector {
+  font-size: 12px;
+  width: min(13rem, calc(100% - 16px));
+  padding: 10px 12px 12px;
+}
+
+.field-inspector-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.field-inspector-cluster {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--gray-400);
+}
+
+.field-inspector-close {
+  padding: 0 4px;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--gray-400);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.field-inspector-close:hover {
+  color: var(--black);
+}
+
+.field-inspector-name {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--black);
+}
+
+.field-inspector-id {
+  margin: 0 0 10px;
+  font-size: 9px;
+  color: var(--gray-400);
+  word-break: break-all;
+}
+
+.field-inspector-dl {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field-inspector-dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 6px;
+  border-top: 1px solid var(--gray-100);
+}
+
+.field-inspector-dl > div:first-of-type {
+  padding-top: 0;
+  border-top: none;
+}
+
+.field-inspector-dl dt {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gray-400);
+}
+
+.field-inspector-dl dd {
+  margin: 0;
+  font-size: 11px;
+  color: var(--black);
+}

@@ -1,0 +1,42 @@
+/* Dedicated field page — larger bird's-eye canvas */
+
+.field-page {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  height: calc(100vh - 48px);
+  min-height: 0;
+}
+
+.field-page-canvas {
+  flex: 1;
+  min-height: 360px;
+  display: flex;
+  flex-direction: column;
+  background: #f2f0ec;
+  border: none;
+  border-radius: 0;
+  overflow: hidden;
+  box-shadow: none;
+}
+
+.field-page-canvas > .field-canvas-container {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+.field-page-info {
+  flex-shrink: 0;
+  padding: 12px 20px 16px;
+  background: var(--white);
+  border-top: 1px solid var(--gray-100);
+  color: var(--gray-600);
+}
+
+.field-page-hint {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.55;
+  letter-spacing: 0.02em;
+}

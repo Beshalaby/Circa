@@ -1,0 +1,356 @@
+.field-shape-editor {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.field-shape-editor-head {
+  padding: 20px 22px 12px;
+  border-bottom: 1px solid var(--gray-100);
+}
+
+.field-shape-kicker {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gray-500);
+  margin: 0 0 6px;
+}
+
+.field-shape-title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  margin: 0 0 8px;
+  color: var(--black);
+}
+
+.field-shape-desc {
+  font-size: 13px;
+  color: var(--gray-600);
+  margin: 0;
+  max-width: 42rem;
+  line-height: 1.45;
+}
+
+.field-shape-body {
+  display: grid;
+  grid-template-columns: 1fr minmax(220px, 280px);
+  gap: 0;
+  align-items: stretch;
+  min-height: 320px;
+}
+
+@media (max-width: 820px) {
+  .field-shape-body {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+}
+
+.field-shape-canvas-wrap {
+  position: relative;
+  min-height: 320px;
+  background: #ffffff;
+  border-right: 1px solid var(--gray-100);
+}
+
+@media (max-width: 820px) {
+  .field-shape-canvas-wrap {
+    border-right: none;
+    border-bottom: 1px solid var(--gray-100);
+    min-height: 280px;
+  }
+}
+
+.field-shape-canvas-gl {
+  width: 100%;
+  height: 100%;
+  min-height: 320px;
+  display: block;
+}
+
+.field-shape-canvas-overlay {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  right: 12px;
+  z-index: 2;
+  pointer-events: none;
+  max-width: min(22rem, 100%);
+}
+
+.field-shape-steps-shell {
+  pointer-events: auto;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: var(--radius-md);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 4px 24px rgba(15, 14, 12, 0.06);
+  overflow: hidden;
+}
+
+.field-shape-steps-shell--minimized {
+  max-width: fit-content;
+}
+
+.field-shape-steps-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+}
+
+.field-shape-steps-bar-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--gray-600);
+}
+
+.field-shape-steps-toggle {
+  flex-shrink: 0;
+  font-size: 11px;
+  padding: 4px 8px;
+}
+
+.field-shape-steps {
+  margin: 0;
+  padding: 10px 12px 12px;
+  list-style: decimal;
+  list-style-position: inside;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--gray-800);
+  border-top: 1px solid var(--gray-100);
+}
+
+.field-shape-steps li {
+  margin: 0 0 4px;
+}
+
+.field-shape-steps li:last-child {
+  margin-bottom: 0;
+}
+
+.field-shape-side-intro {
+  padding-bottom: 2px;
+}
+
+.field-shape-side-tip {
+  margin: 0;
+  font-size: 12px;
+  color: var(--gray-600);
+  line-height: 1.45;
+}
+
+.field-shape-measurements {
+  border: 1px solid var(--gray-100);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--white);
+}
+
+.field-shape-measurements-summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 10px 12px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--gray-600);
+  border-bottom: 1px solid var(--gray-50);
+  user-select: none;
+}
+
+.field-shape-measurements-summary::-webkit-details-marker {
+  display: none;
+}
+
+.field-shape-measurements[open] .field-shape-measurements-summary {
+  color: var(--black);
+}
+
+.field-shape-measurements .field-shape-edges {
+  border: none;
+  border-radius: 0;
+}
+
+.field-shape-side {
+  padding: 18px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  background: var(--white);
+}
+
+.field-shape-edges {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--gray-100);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.field-shape-edges li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--gray-50);
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.field-shape-edges li:last-child {
+  border-bottom: none;
+}
+
+.field-shape-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.field-shape-edge-label {
+  color: var(--gray-600);
+  font-weight: 500;
+  min-width: 2.25rem;
+}
+
+.field-shape-edge-val {
+  color: var(--black);
+  font-weight: 600;
+  flex: 1;
+  text-align: right;
+}
+
+.field-shape-edge-length-hint {
+  margin: 0 0 10px;
+  padding: 0 12px;
+  font-size: 11px;
+  color: var(--gray-500);
+  line-height: 1.45;
+}
+
+.field-shape-edge-length-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.field-shape-edge-length-input {
+  width: 4.85rem;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.field-shape-edge-length-unit {
+  font-size: 11px;
+  color: var(--gray-600);
+  flex-shrink: 0;
+}
+
+.field-shape-edge-add {
+  flex-shrink: 0;
+  font-size: 11px;
+  padding: 4px 8px;
+}
+
+.field-shape-verts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--gray-100);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  max-height: 10rem;
+  overflow-y: auto;
+}
+
+.field-shape-verts li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  font-size: 11px;
+  border-bottom: 1px solid var(--gray-50);
+}
+
+.field-shape-verts li:last-child {
+  border-bottom: none;
+}
+
+.field-shape-vert-coord {
+  color: var(--gray-700);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.field-shape-vert-remove {
+  flex-shrink: 0;
+  font-size: 11px;
+  padding: 3px 8px;
+}
+
+.field-shape-reset-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--gray-500);
+  margin-bottom: 10px;
+}
+
+.field-shape-reset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.field-shape-reset-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 5rem;
+  font-size: 11px;
+  color: var(--gray-600);
+}
+
+.field-shape-reset-field .input {
+  width: 100%;
+}
+
+.field-shape-reset-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.field-shape-hint {
+  margin: 12px 0 0;
+  font-size: 11px;
+  color: var(--gray-500);
+  line-height: 1.5;
+}

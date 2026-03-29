@@ -1,0 +1,927 @@
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useFieldStore } from '../lib/socket';
+import { useHardwareStore } from '../lib/hardwareStore';
+import {
+  TurretApiClient,
+  SPEED_MIN, SPEED_MAX, SPEED_DEFAULT,
+  SERVO_MIN, SERVO_MAX, SERVO_HOME,
+  STEPS_PER_REV, PUMP_MAX_MS,
+} from '../lib/turretApi';
+import type { HardwareResult, StepperDir } from '../lib/turretApi';
+import './ControlPage.css';
+
+const SERVER = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
+const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
+
+// ── Types ────────────────────────────────────────────────────
+interface Schedule {
+  id: string;
+  name: string;
+  station_id: string;
+  trigger: { type: 'time' | 'condition'; cron?: string; metric?: string; operator?: string; threshold?: number };
+  conditions: any[];
+  actions: { type: string; angle?: number; duration?: number }[];
+  enabled: boolean;
+  created_at: string;
+}
+
+type Tab = 'scheduler' | 'turret' | 'chat';
+
+export default function ControlPage() {
+  const [activeTab, setActiveTab] = useState<Tab>('scheduler');
+
+  return (
+    <div className="control-page">
+      {/* ── Tab rail ── */}
+      <div className="control-tabs">
+        <TabBtn id="tab-scheduler" label="Scheduler" icon="⊡" active={activeTab === 'scheduler'} onClick={() => setActiveTab('scheduler')} />
+        <TabBtn id="tab-turret"    label="Turret"    icon="⊟" active={activeTab === 'turret'}    onClick={() => setActiveTab('turret')} />
+        <TabBtn id="tab-chat"      label="AI Chat"   icon="◈" active={activeTab === 'chat'}      onClick={() => setActiveTab('chat')} />
+        <div className="tab-indicator" style={{ '--idx': ['scheduler','turret','chat'].indexOf(activeTab) } as any} />
+      </div>
+
+      <div className="control-body fade-in" key={activeTab}>
+        {activeTab === 'scheduler' && <SchedulerTab />}
+        {activeTab === 'turret'    && <TurretTab />}
+        {activeTab === 'chat'      && <AIChatTab />}
+      </div>
+    </div>
+  );
+}
+
+function TabBtn({ id, label, icon, active, onClick }: { id: string; label: string; icon: string; active: boolean; onClick: () => void }) {
+  return (
+    <button id={id} className={`tab-btn ${active ? 'active' : ''}`} onClick={onClick}>
+      <span className="tab-icon">{icon}</span>
+      <span>{label}</span>
+    </button>
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+// SCHEDULER TAB
+// ────────────────────────────────────────────────────────────
+function SchedulerTab() {
+  const { stations } = useFieldStore();
+  const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`${SERVER}/api/schedules`)
+      .then((r) => r.json())
+      .then((data) => { if (Array.isArray(data)) setSchedules(data); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const deleteSchedule = async (id: string) => {
+    await fetch(`${SERVER}/api/schedules/${id}`, { method: 'DELETE' }).catch(() => {});
+    setSchedules((s) => s.filter((x) => x.id !== id));
+  };
+
+  const toggleSchedule = async (id: string, enabled: boolean) => {
+    await fetch(`${SERVER}/api/schedules/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled }),
+    }).catch(() => {});
+    setSchedules((s) => s.map((x) => x.id === id ? { ...x, enabled } : x));
+  };
+
+  const onCreated = (s: Schedule) => {
+    setSchedules((prev) => [s, ...prev]);
+    setShowForm(false);
+  };
+
+  return (
+    <div className="scheduler">
+      <div className="scheduler-header">
+        <div>
+          <h2 className="ctrl-section-title">Automation Schedules</h2>
+          <p className="ctrl-section-sub">If-This-Then-That rules for automatic irrigation</p>
+        </div>
+        <button id="add-schedule-btn" className="btn-primary" onClick={() => setShowForm(true)}>
+          + New Rule
+        </button>
+      </div>
+
+      {loading && <div className="flex-center" style={{ padding: 40 }}><div className="spinner" /></div>}
+
+      {!loading && schedules.length === 0 && !showForm && (
+        <div className="ctrl-empty card">
+          <p>No automation rules yet.</p>
+          <p style={{ color: 'var(--gray-mid)', fontSize: 13 }}>Create a rule to automate your turret based on sensor conditions or a time schedule.</p>
+        </div>
+      )}
+
+      <div className="schedule-list">
+        {schedules.map((s) => <ScheduleCard key={s.id} schedule={s} onDelete={deleteSchedule} onToggle={toggleSchedule} />)}
+      </div>
+
+      {showForm && (
+        <ScheduleForm stations={stations} onCancel={() => setShowForm(false)} onCreated={onCreated} />
+      )}
+    </div>
+  );
+}
+
+function ScheduleCard({ schedule, onDelete, onToggle }: {
+  schedule: Schedule;
+  onDelete: (id: string) => void;
+  onToggle: (id: string, enabled: boolean) => void;
+}) {
+  const triggerLabel = schedule.trigger.type === 'time'
+    ? `⏰ ${schedule.trigger.cron}`
+    : `📊 ${schedule.trigger.metric} ${schedule.trigger.operator} ${schedule.trigger.threshold}%`;
+
+  const actionLabel = schedule.actions.map((a) =>
+    a.type === 'fire_turret' ? `Fire turret @ ${a.angle}° for ${a.duration}s` : a.type
+  ).join(', ');
+
+  return (
+    <div className={`schedule-card card ${!schedule.enabled ? 'disabled' : ''}`}>
+      <div className="schedule-card-left">
+        <div className="schedule-toggle">
+          <label className="toggle-switch">
+            <input
+              type="checkbox"
+              checked={schedule.enabled}
+              onChange={(e) => onToggle(schedule.id, e.target.checked)}
+            />
+            <span className="toggle-slider" />
+          </label>
+        </div>
+        <div>
+          <p className="schedule-name">{schedule.name}</p>
+          <p className="schedule-trigger">{triggerLabel}</p>
+          <p className="schedule-action">→ {actionLabel}</p>
+        </div>
+      </div>
+      <button className="schedule-delete" onClick={() => onDelete(schedule.id)} title="Delete">✕</button>
+    </div>
+  );
+}
+
+function ScheduleForm({ stations, onCancel, onCreated }: {
+  stations: any[];
+  onCancel: () => void;
+  onCreated: (s: Schedule) => void;
+}) {
+  const [form, setForm] = useState({
+    name: '',
+    station_id: stations[0]?.id || '',
+    trigger_type: 'condition',
+    metric: 'soil_moisture',
+    operator: '<',
+    threshold: 30,
+    cron: '0 6 * * *',
+    angle: 90,
+    duration: 10,
+  });
+  const [saving, setSaving] = useState(false);
+
+  const upd = (k: string, v: any) => setForm((f) => ({ ...f, [k]: v }));
+
+  const handleSave = async () => {
+    setSaving(true);
+    const body = {
+      name: form.name,
+      station_id: form.station_id,
+      trigger: form.trigger_type === 'condition'
+        ? { type: 'condition', metric: form.metric, operator: form.operator, threshold: form.threshold }
+        : { type: 'time', cron: form.cron },
+      conditions: [],
+      actions: [{ type: 'fire_turret', angle: form.angle, duration: form.duration }],
+      enabled: true,
+    };
+    const r = await fetch(`${SERVER}/api/schedules`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).catch(() => null);
+
+    if (r?.ok) {
+      const data = await r.json();
+      onCreated(data);
+    } else {
+      // Optimistic if no backend
+      onCreated({ ...body, id: Date.now().toString(), created_at: new Date().toISOString() } as any);
+    }
+    setSaving(false);
+  };
+
+  return (
+    <div className="schedule-form card">
+      <h3 className="form-title">New Automation Rule</h3>
+
+      <div className="form-row">
+        <label className="label">Rule Name</label>
+        <input className="input" placeholder="e.g. Morning irrigation" value={form.name} onChange={(e) => upd('name', e.target.value)} />
+      </div>
+
+      <div className="form-row">
+        <label className="label">Base Station</label>
+        <select className="input" value={form.station_id} onChange={(e) => upd('station_id', e.target.value)}>
+          {stations.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          {stations.length === 0 && <option value="">No stations — add one from the Configure page first</option>}
+        </select>
+      </div>
+
+      <div className="form-row-split">
+        <div>
+          <label className="label">Trigger Type</label>
+          <select className="input" value={form.trigger_type} onChange={(e) => upd('trigger_type', e.target.value)}>
+            <option value="condition">Sensor Condition</option>
+            <option value="time">Time (Cron)</option>
+          </select>
+        </div>
+
+        {form.trigger_type === 'condition' ? (
+          <>
+            <div>
+              <label className="label">Metric</label>
+              <select className="input" value={form.metric} onChange={(e) => upd('metric', e.target.value)}>
+                <option value="soil_moisture">Soil Moisture</option>
+                <option value="humidity">Humidity</option>
+                <option value="temperature">Temperature</option>
+              </select>
+            </div>
+            <div>
+              <label className="label">Operator</label>
+              <select className="input" value={form.operator} onChange={(e) => upd('operator', e.target.value)}>
+                <option value="<">below (&lt;)</option>
+                <option value=">">above (&gt;)</option>
+              </select>
+            </div>
+            <div>
+              <label className="label">Threshold (%)</label>
+              <input className="input" type="number" value={form.threshold} onChange={(e) => upd('threshold', parseInt(e.target.value))} />
+            </div>
+          </>
+        ) : (
+          <div>
+            <label className="label">Cron Expression</label>
+            <input className="input mono" placeholder="0 6 * * *" value={form.cron} onChange={(e) => upd('cron', e.target.value)} />
+          </div>
+        )}
+      </div>
+
+      <div className="form-section-title">Action: Fire Turret</div>
+      <div className="form-row-split">
+        <div>
+          <label className="label">Angle (0–180°)</label>
+          <input className="input" type="number" min="0" max="180" value={form.angle} onChange={(e) => upd('angle', parseInt(e.target.value))} />
+        </div>
+        <div>
+          <label className="label">Duration (s)</label>
+          <input className="input" type="number" min="1" value={form.duration} onChange={(e) => upd('duration', parseInt(e.target.value))} />
+        </div>
+      </div>
+
+      <div className="form-actions">
+        <button className="btn-ghost" onClick={onCancel}>Cancel</button>
+        <button className="btn-primary" disabled={!form.name || saving} onClick={handleSave}>
+          {saving ? <span className="spinner" /> : 'Save Rule'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+// TURRET TAB
+// ────────────────────────────────────────────────────────────
+function TurretTab() {
+  const { stations } = useFieldStore();
+  const getHardwareUrl = useHardwareStore((s) => s.getUrl);
+
+  const [selectedStation, setSelectedStation] = useState('');
+  const [pingStatus, setPingStatus] = useState<'idle' | 'ok' | 'fail'>('idle');
+  const [pinging, setPinging] = useState(false);
+
+  const hardwareUrl = selectedStation ? getHardwareUrl(selectedStation) : 'http://192.168.4.1';
+  const api = useMemo(
+    () => selectedStation ? new TurretApiClient(hardwareUrl, SERVER, true) : null,
+    [selectedStation, hardwareUrl],
+  );
+
+  const ping = useCallback(async () => {
+    if (!api) return;
+    setPinging(true);
+    const r = await api.ping();
+    setPingStatus(r.ok ? 'ok' : 'fail');
+    setPinging(false);
+  }, [api]);
+
+  useEffect(() => {
+    setPingStatus('idle');
+    if (selectedStation) ping();
+  }, [selectedStation]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (stations.length === 0) {
+    return (
+      <div className="turret-tab">
+        <h2 className="ctrl-section-title">Hardware Control</h2>
+        <div className="ctrl-empty card">
+          <p>No stations configured</p>
+          <p style={{ color: 'var(--gray-mid)', fontSize: 13 }}>
+            Add a base station from the Configure page first.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="turret-tab">
+      <h2 className="ctrl-section-title">Hardware Control</h2>
+      <p className="ctrl-section-sub">Direct control of the ESP32 turret base station</p>
+
+      {/* ── Connection row ── */}
+      <div className="hw-connection card">
+        <div className="hw-connection-row">
+          <div className="form-row hw-station-row">
+            <label className="label">Base Station</label>
+            <select
+              id="turret-station-sel"
+              className="input"
+              value={selectedStation}
+              onChange={(e) => setSelectedStation(e.target.value)}
+            >
+              <option value="">Select a station…</option>
+              {stations.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {selectedStation && (
+            <div className="hw-status-col">
+              <span className="label">Hardware URL</span>
+              <span className="hw-url mono">{hardwareUrl}</span>
+              <div className="hw-ping-row">
+                <span className={`hw-badge hw-badge--${pingStatus}`}>
+                  {pinging ? '…' : pingStatus === 'ok' ? 'Online' : pingStatus === 'fail' ? 'Offline' : '—'}
+                </span>
+                <button className="btn-ghost hw-ping-btn" onClick={ping} disabled={pinging}>
+                  {pinging ? <span className="spinner" /> : 'Ping'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {!selectedStation && (
+          <p className="hw-select-hint">Select a station above to enable controls.</p>
+        )}
+      </div>
+
+      {selectedStation && api && (
+        <>
+          {/* ── E-Stop ── */}
+          <EmergencyStop api={api} />
+
+          {/* ── Aim (primary control) ── */}
+          <AimPanel api={api} />
+
+          {/* ── Stepper ── */}
+          <StepperPanel api={api} />
+
+          {/* ── Servo ── */}
+          <ServoPanel api={api} />
+
+          {/* ── Pump ── */}
+          <PumpPanel api={api} />
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Emergency Stop ─────────────────────────────────────────
+function EmergencyStop({ api }: { api: TurretApiClient }) {
+  const [busy, setBusy] = useState(false);
+
+  const stop = async () => {
+    setBusy(true);
+    await Promise.all([api.stopStepper(), api.pumpOff()]);
+    setBusy(false);
+  };
+
+  return (
+    <div className="hw-estop-bar">
+      <button className="hw-estop-btn" disabled={busy} onClick={stop}>
+        {busy ? <span className="spinner hw-estop-spinner" /> : '⊠'}
+        <span>Emergency Stop</span>
+      </button>
+      <span className="hw-estop-hint">Stops stepper + pump immediately</span>
+    </div>
+  );
+}
+
+// ── Joystick pad ───────────────────────────────────────────
+function JoystickPad({
+  x, y, size = 200,
+  onChange,
+  onRelease,
+}: {
+  x: number; y: number; size?: number;
+  onChange: (x: number, y: number) => void;
+  onRelease?: () => void;
+}) {
+  const padRef = useRef<HTMLDivElement>(null);
+  const dragging = useRef(false);
+
+  const fromEvent = (e: React.PointerEvent | PointerEvent) => {
+    if (!padRef.current) return;
+    const rect = padRef.current.getBoundingClientRect();
+    const r    = rect.width / 2;
+    let nx = (e.clientX - (rect.left + r)) / r;
+    let ny = (e.clientY - (rect.top  + r)) / r;
+    const mag = Math.hypot(nx, ny);
+    if (mag > 1) { nx /= mag; ny /= mag; }
+    onChange(nx, ny);
+  };
+
+  return (
+    <div
+      ref={padRef}
+      className="joystick-pad"
+      style={{ width: size, height: size }}
+      onPointerDown={(e) => {
+        dragging.current = true;
+        padRef.current?.setPointerCapture(e.pointerId);
+        fromEvent(e);
+      }}
+      onPointerMove={(e) => { if (dragging.current) fromEvent(e); }}
+      onPointerUp={() => { dragging.current = false; onRelease?.(); }}
+      onPointerCancel={() => { dragging.current = false; onRelease?.(); }}
+    >
+      {/* Crosshair */}
+      <div className="joystick-line joystick-h" />
+      <div className="joystick-line joystick-v" />
+      {/* Inner ring */}
+      <div className="joystick-ring joystick-ring--inner" />
+      {/* Handle */}
+      <div
+        className="joystick-handle"
+        style={{ left: `${50 + x * 50}%`, top: `${50 + y * 50}%` }}
+      />
+    </div>
+  );
+}
+
+// ── Aim Panel (joystick-driven) ─────────────────────────────
+function AimPanel({ api }: { api: TurretApiClient }) {
+  const [jx, setJx] = useState(0);
+  const [jy, setJy] = useState(0);
+  const [aimSpeed, setAimSpeed] = useState(SPEED_DEFAULT);
+  const [liveMode, setLiveMode] = useState(false);
+  const [sprayMs, setSprayMs] = useState(3000);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [result, setResult] = useState<HardwareResult | null>(null);
+  const throttleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestXY    = useRef({ x: 0, y: 0 });
+
+  const sendAim = useCallback(async (x: number, y: number) => {
+    const r = await api.aim(x, y, aimSpeed);
+    setResult(r);
+  }, [api, aimSpeed]);
+
+  const handleJoystick = (x: number, y: number) => {
+    setJx(x); setJy(y);
+    latestXY.current = { x, y };
+
+    if (liveMode) {
+      if (throttleRef.current) return; // already scheduled
+      throttleRef.current = setTimeout(() => {
+        throttleRef.current = null;
+        sendAim(latestXY.current.x, latestXY.current.y);
+      }, 150);
+    }
+  };
+
+  const sendOnce = async () => {
+    setBusy('aim');
+    setResult(null);
+    const r = await api.aim(jx, jy, aimSpeed);
+    setResult(r);
+    setBusy(null);
+  };
+
+  const fire = async () => {
+    setBusy('fire');
+    setResult(null);
+    const aimR = await api.aim(jx, jy, aimSpeed);
+    if (!aimR.ok) { setResult(aimR); setBusy(null); return; }
+    const pumpR = await api.pumpOn();
+    setResult(pumpR);
+    setBusy(null);
+    // auto-off
+    setTimeout(() => api.pumpOff(), sprayMs);
+  };
+
+  const radius = Math.min(Math.hypot(jx, jy), 1);
+  const yawDeg = (Math.atan2(-jy, jx) * 180 / Math.PI + 360) % 360;
+
+  return (
+    <section className="hw-panel card">
+      <div className="hw-aim-header">
+        <h3 className="hw-panel-title">Aim</h3>
+        <label className="hw-live-toggle">
+          <input
+            type="checkbox"
+            checked={liveMode}
+            onChange={(e) => setLiveMode(e.target.checked)}
+          />
+          <span className={`hw-live-pill ${liveMode ? 'active' : ''}`}>Live</span>
+        </label>
+      </div>
+
+      {liveMode && (
+        <p className="hw-panel-sub hw-live-note">
+          Aim commands are sent continuously as you drag.
+        </p>
+      )}
+
+      <div className="hw-aim-body">
+        <JoystickPad x={jx} y={jy} size={180} onChange={handleJoystick} />
+
+        <div className="hw-aim-readout">
+          <div className="hw-readout-row">
+            <span className="hw-readout-label">Yaw</span>
+            <span className="hw-readout-val mono">{yawDeg.toFixed(1)}°</span>
+          </div>
+          <div className="hw-readout-row">
+            <span className="hw-readout-label">Radius</span>
+            <span className="hw-readout-val mono">{radius.toFixed(2)}</span>
+          </div>
+          <div className="hw-readout-row">
+            <span className="hw-readout-label">X</span>
+            <span className="hw-readout-val mono">{jx.toFixed(3)}</span>
+          </div>
+          <div className="hw-readout-row">
+            <span className="hw-readout-label">Y</span>
+            <span className="hw-readout-val mono">{jy.toFixed(3)}</span>
+          </div>
+
+          <div className="form-row" style={{ marginTop: 12 }}>
+            <label className="label">Speed</label>
+            <div className="hw-speed-presets">
+              {([['Slow', 100], ['Med', 350], ['Fast', 800]] as const).map(([label, val]) => (
+                <button
+                  key={label}
+                  className={`hw-speed-preset ${aimSpeed === val ? 'active' : ''}`}
+                  onClick={() => setAimSpeed(val)}
+                >{label}</button>
+              ))}
+            </div>
+            <span className="hw-range-hint mono">{aimSpeed} steps/s</span>
+          </div>
+        </div>
+      </div>
+
+      {!liveMode && (
+        <button className="btn-primary hw-btn hw-btn--full" disabled={!!busy} onClick={sendOnce}>
+          {busy === 'aim' ? <><span className="spinner" /> Aiming…</> : '⊟ Send Aim'}
+        </button>
+      )}
+
+      {/* ── Fire row ── */}
+      <div className="hw-fire-row">
+        <div className="form-row hw-fire-dur">
+          <label className="label">Spray — {(sprayMs / 1000).toFixed(0)} s</label>
+          <input
+            type="range" className="angle-slider"
+            min={1000} max={PUMP_MAX_MS} step={1000} value={sprayMs}
+            onChange={(e) => setSprayMs(parseInt(e.target.value))}
+          />
+        </div>
+        <button
+          className="btn-primary hw-btn hw-fire-btn"
+          disabled={!!busy}
+          onClick={fire}
+        >
+          {busy === 'fire' ? <span className="spinner" /> : '◉'} Fire
+        </button>
+      </div>
+
+      <HwResult result={result} />
+    </section>
+  );
+}
+
+// ── Stepper Panel ──────────────────────────────────────────
+function StepperPanel({ api }: { api: TurretApiClient }) {
+  const [speed, setSpeed] = useState(SPEED_DEFAULT);
+  const [jogSteps, setJogSteps] = useState(200);
+  const [jogDir, setJogDir] = useState<StepperDir>('cw');
+  const [busy, setBusy] = useState<string | null>(null);
+  const [result, setResult] = useState<HardwareResult | null>(null);
+
+  const run = async (label: string, fn: () => Promise<HardwareResult>) => {
+    setBusy(label);
+    setResult(null);
+    const r = await fn();
+    setResult(r);
+    setBusy(null);
+  };
+
+  return (
+    <section className="hw-panel card">
+      <h3 className="hw-panel-title">Stepper — Yaw Rotation</h3>
+
+      <div className="form-row">
+        <label className="label">Speed — {speed} steps/s</label>
+        <div className="hw-speed-presets">
+          {([['Slow', 100], ['Med', 350], ['Fast', 800]] as const).map(([label, val]) => (
+            <button
+              key={label}
+              className={`hw-speed-preset ${speed === val ? 'active' : ''}`}
+              onClick={() => setSpeed(val)}
+            >{label}</button>
+          ))}
+        </div>
+        <input
+          type="range" className="angle-slider"
+          min={SPEED_MIN} max={SPEED_MAX} step={50} value={speed}
+          onChange={(e) => setSpeed(parseInt(e.target.value))}
+        />
+      </div>
+
+      <div className="hw-btn-row">
+        <button className="btn-primary hw-btn" disabled={!!busy}
+          onClick={() => run('cw', () => api.startStepper('cw', speed))}>
+          {busy === 'cw' ? <span className="spinner" /> : '↻'} CW
+        </button>
+        <button className="btn-primary hw-btn" disabled={!!busy}
+          onClick={() => run('ccw', () => api.startStepper('ccw', speed))}>
+          {busy === 'ccw' ? <span className="spinner" /> : '↺'} CCW
+        </button>
+        <button className="btn-ghost hw-btn hw-btn--stop" disabled={busy === 'stop'}
+          onClick={() => run('stop', () => api.stopStepper())}>
+          {busy === 'stop' ? <span className="spinner" /> : '⊠'} Stop
+        </button>
+      </div>
+
+      <div className="hw-jog-row">
+        <div className="form-row hw-jog-steps">
+          <label className="label">Steps</label>
+          <input className="input mono" type="number" min="1" max={STEPS_PER_REV * 10}
+            value={jogSteps} onChange={(e) => setJogSteps(parseInt(e.target.value))} />
+        </div>
+        <div className="form-row hw-jog-dir">
+          <label className="label">Dir</label>
+          <select className="input" value={jogDir} onChange={(e) => setJogDir(e.target.value as StepperDir)}>
+            <option value="cw">CW</option>
+            <option value="ccw">CCW</option>
+          </select>
+        </div>
+        <button className="btn-primary hw-btn hw-jog-btn" disabled={!!busy}
+          onClick={() => run('jog', () => api.jogStepper(jogDir, speed, jogSteps))}>
+          {busy === 'jog' ? <span className="spinner" /> : 'Jog'}
+        </button>
+      </div>
+
+      <HwResult result={result} />
+    </section>
+  );
+}
+
+// ── Servo Panel ────────────────────────────────────────────
+function ServoPanel({ api }: { api: TurretApiClient }) {
+  const [angle, setAngle] = useState(SERVO_HOME);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<HardwareResult | null>(null);
+
+  const send = async (a: number) => {
+    setBusy(true);
+    setResult(null);
+    const r = await api.setServo(a);
+    setResult(r);
+    setBusy(false);
+  };
+
+  const PRESETS = [
+    { label: 'Near', value: 130 },
+    { label: 'Home', value: SERVO_HOME },
+    { label: 'Far',  value: 45 },
+  ] as const;
+
+  return (
+    <section className="hw-panel card">
+      <h3 className="hw-panel-title">Servo — Pitch / Tilt</h3>
+
+      <div className="hw-servo-presets">
+        {PRESETS.map(({ label, value }) => (
+          <button
+            key={label}
+            className={`hw-servo-preset ${angle === value ? 'active' : ''}`}
+            disabled={busy}
+            onClick={() => { setAngle(value); send(value); }}
+          >
+            <span className="hw-servo-preset-label">{label}</span>
+            <span className="hw-servo-preset-deg mono">{value}°</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="form-row">
+        <label className="label">Custom — {angle}° <span className="hw-range-hint">({SERVO_MIN}–{SERVO_MAX}°)</span></label>
+        <div className="angle-wrap">
+          <input type="range" className="angle-slider"
+            min={SERVO_MIN} max={SERVO_MAX} value={angle}
+            onChange={(e) => setAngle(parseInt(e.target.value))} />
+          <span className="angle-val mono">{angle}°</span>
+        </div>
+      </div>
+
+      <button className="btn-primary hw-btn" disabled={busy} onClick={() => send(angle)}>
+        {busy ? <span className="spinner" /> : 'Set Angle'}
+      </button>
+
+      <HwResult result={result} />
+    </section>
+  );
+}
+
+// ── Pump Panel ─────────────────────────────────────────────
+function PumpPanel({ api }: { api: TurretApiClient }) {
+  const [sprayMs, setSprayMs] = useState(5000);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [result, setResult] = useState<HardwareResult | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const run = async (label: string, fn: () => Promise<HardwareResult>) => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    setBusy(label);
+    setResult(null);
+    const r = await fn();
+    setResult(r);
+    setBusy(null);
+  };
+
+  const spray = async () => {
+    await run('spray', () => api.pumpOn());
+    timerRef.current = setTimeout(async () => {
+      const r = await api.pumpOff();
+      setResult(r);
+    }, sprayMs);
+  };
+
+  return (
+    <section className="hw-panel card">
+      <h3 className="hw-panel-title">Pump</h3>
+
+      <div className="hw-btn-row">
+        <button className="btn-primary hw-btn hw-pump-on" disabled={!!busy}
+          onClick={() => run('on', () => api.pumpOn())}>
+          {busy === 'on' ? <span className="spinner" /> : '◉'} Pump On
+        </button>
+        <button className="btn-ghost hw-btn" disabled={!!busy}
+          onClick={() => run('off', () => api.pumpOff())}>
+          {busy === 'off' ? <span className="spinner" /> : '◎'} Pump Off
+        </button>
+      </div>
+
+      <div className="hw-spray-row">
+        <div className="form-row hw-spray-dur">
+          <label className="label">
+            Timed spray — {(sprayMs / 1000).toFixed(0)} s
+            <span className="hw-range-hint"> (max {PUMP_MAX_MS / 1000} s)</span>
+          </label>
+          <input type="range" className="angle-slider"
+            min={1000} max={PUMP_MAX_MS} step={1000} value={sprayMs}
+            onChange={(e) => setSprayMs(parseInt(e.target.value))} />
+        </div>
+        <button className="btn-primary hw-btn hw-spray-btn" disabled={!!busy} onClick={spray}>
+          {busy === 'spray' ? <span className="spinner" /> : '⊡'} Spray
+        </button>
+      </div>
+
+      <HwResult result={result} />
+    </section>
+  );
+}
+
+// ── Shared result badge ────────────────────────────────────
+function HwResult({ result }: { result: HardwareResult | null }) {
+  if (!result) return null;
+  return (
+    <p className={`fire-result ${result.ok ? 'success' : 'error'}`}>
+      {result.ok ? '✓' : '✗'} {result.ok ? 'OK' : `Error ${result.status}`}
+      {result.body ? ` — ${result.body.slice(0, 80)}` : ''}
+    </p>
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+// AI CHAT TAB
+// ────────────────────────────────────────────────────────────
+interface Message { role: 'user' | 'assistant'; content: string; }
+
+const SYSTEM_PROMPT = `You are Circa AI, an assistant for a smart farming irrigation system. 
+The user has ESP32-based turret base stations that can fire water at specific angles, and sensor nodes measuring soil moisture.
+Help the user create automation schedules using natural language. When creating a schedule, output a JSON object like:
+{ "name": "...", "trigger": { "type": "condition"|"time", ... }, "actions": [...] }
+Be concise and practical. Focus on water efficiency.`;
+
+async function callGemini(messages: Message[]): Promise<string> {
+  if (!GEMINI_KEY) {
+    return "⚠️ No Gemini API key configured. Add VITE_GEMINI_API_KEY to your .env file to enable AI chat.";
+  }
+
+  const contents = messages.map((m) => ({
+    role: m.role === 'user' ? 'user' : 'model',
+    parts: [{ text: m.content }],
+  }));
+
+  const r = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        contents,
+        generationConfig: { temperature: 0.7, maxOutputTokens: 1024 },
+      }),
+    }
+  );
+
+  if (!r.ok) throw new Error(`Gemini error: ${r.status}`);
+  const data = await r.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response';
+}
+
+function AIChatTab() {
+  const [messages, setMessages] = useState<Message[]>([
+    { role: 'assistant', content: 'Hi! I\'m Circa AI. Tell me what you want to automate — for example: "Water the north field when soil moisture drops below 30%." I\'ll help you create a schedule.' },
+  ]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const endRef = useRef<HTMLDivElement>(null);
+  const { stations } = useFieldStore();
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const send = async () => {
+    if (!input.trim() || loading) return;
+    const userMsg: Message = { role: 'user', content: input.trim() };
+    const next = [...messages, userMsg];
+    setMessages(next);
+    setInput('');
+    setLoading(true);
+
+    try {
+      const reply = await callGemini(next);
+      setMessages((m) => [...m, { role: 'assistant', content: reply }]);
+    } catch (e: any) {
+      setMessages((m) => [...m, { role: 'assistant', content: `Error: ${e.message}` }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="chat-tab">
+      <div className="chat-header">
+        <h2 className="ctrl-section-title">AI Schedule Assistant</h2>
+        <p className="ctrl-section-sub">Describe automations in natural language — powered by Gemini</p>
+      </div>
+
+      <div className="chat-messages">
+        {messages.map((m, i) => (
+          <div key={i} className={`chat-message ${m.role}`}>
+            <div className="chat-bubble">
+              <pre className="chat-text">{m.content}</pre>
+            </div>
+          </div>
+        ))}
+        {loading && (
+          <div className="chat-message assistant">
+            <div className="chat-bubble"><div className="typing-dots"><span/><span/><span/></div></div>
+          </div>
+        )}
+        <div ref={endRef} />
+      </div>
+
+      <div className="chat-input-row">
+        <input
+          id="chat-input"
+          className="input"
+          placeholder="e.g. Water zone 2 every morning at 6am..."
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && send()}
+        />
+        <button id="chat-send" className="btn-primary" disabled={!input.trim() || loading} onClick={send}>
+          Send
+        </button>
+      </div>
+    </div>
+  );
+}
