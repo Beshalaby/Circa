@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.3 — 2026-03-28
+
+- **Dependencies** (`client/package-lock.json`): Added `react-icons` package for UI icons.
+- **Node firmware**: Flashed node-002 as a second independent sensor node.
+
 ## 0.6.2 — 2026-03-28
 
 - **Client — auto-detect base station** (`ControlPage.tsx`): Removed manual station selector from Turret tab. Base station at `192.168.4.1` is now auto-detected on load (same as nodes). Shows Online/Offline badge and pings on mount. Controls appear automatically when online.
